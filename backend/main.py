@@ -24,6 +24,12 @@ class CompetitorPB(BaseModel):
     average_pb: Optional[str]
 
 
+class RankPositions(BaseModel):
+    world: Optional[int]
+    continent: Optional[int]
+    country: Optional[int]
+
+
 class EventStats(BaseModel):
     competition_count: int
     round_count: int
@@ -36,6 +42,15 @@ class EventStats(BaseModel):
     current_pb_value: Optional[float]
     best_average: Optional[str]
     best_average_value: Optional[float]
+    single_rank: Optional[RankPositions] = None
+    average_rank: Optional[RankPositions] = None
+    solve_std_dev: Optional[str]
+    solve_std_dev_value: Optional[float]
+    worst_solve: Optional[str]
+    worst_solve_value: Optional[float]
+    dnf_count: int
+    attempt_count: int
+    dnf_rate: Optional[float]
     first_date: Optional[str]
     latest_date: Optional[str]
 
@@ -53,14 +68,33 @@ class ProgressionPoint(BaseModel):
     index: Optional[int] = None
 
 
+class ResultValue(BaseModel):
+    raw_value: int
+    value: Optional[float]
+    display: Optional[str]
+
+
+class ResultRow(BaseModel):
+    date: Optional[str]
+    competition_id: str
+    competition_name: str
+    round: str
+    format: str
+    best: ResultValue
+    average: ResultValue
+    attempts: List[ResultValue]
+
+
 class EventProgression(BaseModel):
     event_id: str
     name: str
     unit: str
     average_label: str
     stats: EventStats
+    solve_values: List[float]
     pb_progression: List[ProgressionPoint]
     average_points: List[ProgressionPoint]
+    result_rows: List[ResultRow]
 
 
 class CompetitorProgression(BaseModel):

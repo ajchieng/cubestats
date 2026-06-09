@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import re
-from statistics import mean, median
+from statistics import mean, median, pstdev
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
@@ -171,9 +171,10 @@ async def get_competitor_progression(wca_id: str) -> Dict[str, Any]:
     ]
     competitions = await fetch_competitions(competition_ids)
 
+    rank_data = person.get("rank")
     event_ids = _event_ids_from_results(results)
     events = [
-        _build_event_progression(event_id, results, competitions)
+        _build_event_progression(event_id, results, competitions, rank_data)
         for event_id in event_ids
     ]
     events = [event for event in events if event["stats"]["round_count"] > 0]
@@ -255,6 +256,45 @@ def _rank_best(person: Dict[str, Any], rank_type: str, event_id: str) -> Optiona
     return None
 
 
+def _event_rank(
+    rank_data: Any, rank_type: str, event_id: str
+) -> Optional[Dict[str, Optional[int]]]:
+    if not isinstance(rank_data, dict):
+        return None
+
+    entries = rank_data.get(rank_type)
+    if not isinstance(entries, list):
+        return None
+
+    for entry in entries:
+        if not isinstance(entry, dict) or entry.get("eventId") != event_id:
+            continue
+
+        rank = entry.get("rank")
+        if not isinstance(rank, dict):
+            return None
+
+        positions = {
+            "world": _positive_int(rank.get("world")),
+            "continent": _positive_int(rank.get("continent")),
+            "country": _positive_int(rank.get("country")),
+        }
+
+        if all(value is None for value in positions.values()):
+            return None
+
+        return positions
+
+    return None
+
+
+def _positive_int(value: Any) -> Optional[int]:
+    if isinstance(value, int) and value > 0:
+        return value
+
+    return None
+
+
 def _event_ids_from_results(results: Dict[str, Any]) -> List[str]:
     event_ids = set()
 
@@ -276,6 +316,7 @@ def _build_event_progression(
     event_id: str,
     results: Dict[str, Any],
     competitions: Dict[str, Dict[str, Any]],
+    rank_data: Any = None,
 ) -> Dict[str, Any]:
     rounds: List[Dict[str, Any]] = []
 
@@ -295,9 +336,12 @@ def _build_event_progression(
             if not isinstance(result, dict):
                 continue
 
-            best_raw = _valid_result_value(result.get("best"))
-            average_raw = _valid_result_value(result.get("average"))
+            best_result_raw = _raw_result_value(result.get("best"))
+            average_result_raw = _raw_result_value(result.get("average"))
+            best_raw = _valid_result_value(best_result_raw)
+            average_raw = _valid_result_value(average_result_raw)
             solves_raw = _valid_solve_values(result.get("solves"))
+            attempts_raw = _result_attempt_values(result.get("solves"))
             round_name = str(result.get("round") or f"Round {round_index + 1}")
             format_name = str(result.get("format") or "")
 
@@ -309,9 +353,12 @@ def _build_event_progression(
                     "round": round_name,
                     "format": format_name,
                     "round_index": round_index,
+                    "best_result_raw": best_result_raw,
+                    "average_result_raw": average_result_raw,
                     "best_raw": best_raw,
                     "average_raw": average_raw,
                     "solves_raw": solves_raw,
+                    "attempts_raw": attempts_raw,
                 }
             )
 
@@ -326,6 +373,8 @@ def _build_event_progression(
     pb_progression: List[Dict[str, Any]] = []
     average_points: List[Dict[str, Any]] = []
     all_solve_values: List[float] = []
+    dnf_count = 0
+    attempt_count = 0
     best_average_raw: Optional[int] = None
     current_pb_raw: Optional[int] = None
     average_format = _average_format_for_event(event_id, rounds)
@@ -338,6 +387,13 @@ def _build_event_progression(
             value = _normalized_value(event_id, solve_raw)
             if value is not None:
                 all_solve_values.append(value)
+
+        for attempt_raw in round_result["attempts_raw"]:
+            if attempt_raw == 0:
+                continue
+            attempt_count += 1
+            if attempt_raw == -1:
+                dnf_count += 1
 
         if best_raw is not None and (
             current_pb_raw is None or _is_better_result(best_raw, current_pb_raw)
@@ -362,6 +418,10 @@ def _build_event_progression(
             if round_result["competition_id"]
         }
     )
+
+    solve_std_dev_value = pstdev(all_solve_values) if len(all_solve_values) >= 2 else None
+    worst_solve_value = max(all_solve_values) if all_solve_values else None
+    dnf_rate = dnf_count / attempt_count if attempt_count else None
 
     return {
         "event_id": event_id,
@@ -388,11 +448,29 @@ def _build_event_progression(
             "current_pb_value": _normalized_value(event_id, current_pb_raw),
             "best_average": _format_result_value(event_id, best_average_raw),
             "best_average_value": _normalized_value(event_id, best_average_raw),
+            "single_rank": _event_rank(rank_data, "singles", event_id),
+            "average_rank": _event_rank(rank_data, "averages", event_id),
+            "solve_std_dev": _format_normalized(event_id, solve_std_dev_value)
+            if solve_std_dev_value is not None
+            else None,
+            "solve_std_dev_value": solve_std_dev_value,
+            "worst_solve": _format_normalized(event_id, worst_solve_value)
+            if worst_solve_value is not None
+            else None,
+            "worst_solve_value": worst_solve_value,
+            "dnf_count": dnf_count,
+            "attempt_count": attempt_count,
+            "dnf_rate": dnf_rate,
             "first_date": _first_known_date(rounds),
             "latest_date": _latest_known_date(rounds),
         },
+        "solve_values": all_solve_values,
         "pb_progression": pb_progression,
         "average_points": average_points,
+        "result_rows": [
+            _result_row_from_round(event_id, round_result)
+            for round_result in reversed(rounds)
+        ],
     }
 
 
@@ -408,6 +486,34 @@ def _point_from_round(
         "raw_value": raw_value,
         "value": _normalized_value(event_id, raw_value),
         "display": _format_result_value(event_id, raw_value),
+    }
+
+
+def _result_row_from_round(
+    event_id: str, round_result: Dict[str, Any]
+) -> Dict[str, Any]:
+    return {
+        "date": round_result["date"],
+        "competition_id": round_result["competition_id"],
+        "competition_name": round_result["competition_name"],
+        "round": round_result["round"],
+        "format": round_result["format"],
+        "best": _result_value_payload(event_id, round_result["best_result_raw"]),
+        "average": _result_value_payload(
+            event_id, round_result["average_result_raw"]
+        ),
+        "attempts": [
+            _result_value_payload(event_id, raw_value)
+            for raw_value in round_result["attempts_raw"]
+        ],
+    }
+
+
+def _result_value_payload(event_id: str, raw_value: int) -> Dict[str, Any]:
+    return {
+        "raw_value": raw_value,
+        "value": _normalized_value(event_id, raw_value),
+        "display": _format_any_result_value(event_id, raw_value),
     }
 
 
@@ -456,14 +562,18 @@ def _unit_for_event(event_id: str) -> str:
 
 
 def _valid_solve_values(value: Any) -> List[int]:
+    return [
+        solve_value
+        for solve_value in _result_attempt_values(value)
+        if solve_value > 0
+    ]
+
+
+def _result_attempt_values(value: Any) -> List[int]:
     if not isinstance(value, list):
         return []
 
-    return [
-        solve_value
-        for solve_value in value
-        if isinstance(solve_value, int) and solve_value > 0
-    ]
+    return [solve_value for solve_value in value if isinstance(solve_value, int)]
 
 
 def _is_better_result(candidate: int, current_best: int) -> bool:
@@ -491,6 +601,17 @@ def _format_result_value(event_id: str, raw_value: Optional[int]) -> Optional[st
         return None
 
     return _format_normalized(event_id, value)
+
+
+def _format_any_result_value(event_id: str, raw_value: int) -> Optional[str]:
+    if raw_value == -1:
+        return "DNF"
+    if raw_value == -2:
+        return "DNS"
+    if raw_value == 0:
+        return None
+
+    return _format_result_value(event_id, raw_value)
 
 
 def _format_normalized(event_id: str, value: float) -> str:
@@ -561,5 +682,12 @@ def _valid_result_value(value: Any) -> Optional[int]:
 
     if value <= 0:
         return None
+
+    return value
+
+
+def _raw_result_value(value: Any) -> int:
+    if not isinstance(value, int):
+        return 0
 
     return value
