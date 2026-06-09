@@ -1,0 +1,13 @@
+{
+  "name": "cubestats",
+  "private": true,
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  },
+  "scripts": {
+    "setup": "bash ./scripts/setup.sh",
+    "dev": "npm run setup --silent && npx concurrently \"bash -c 'cd backend && ./venv/bin/python -m uvicorn main:app'\" \"npm --prefix frontend run dev\"",
+    "start-backend": "bash -c 'cd backend && ./venv/bin/python -m uvicorn main:app'",
+    "start-frontend": "npm --prefix frontend run dev"
+  }
+}
