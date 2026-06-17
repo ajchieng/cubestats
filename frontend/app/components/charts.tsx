@@ -106,6 +106,10 @@ export function SeriesChart({
       ).toFixed(2)}`;
     })
     .join(" ");
+  const baseline = CHART_HEIGHT - CHART_PADDING.bottom;
+  const areaPath = `${linePath} L ${scaleX(xValues[xValues.length - 1]).toFixed(
+    2
+  )} ${baseline} L ${scaleX(xValues[0]).toFixed(2)} ${baseline} Z`;
 
   const fitPath =
     showFit && chartPoints.length >= 2
@@ -169,6 +173,7 @@ export function SeriesChart({
         </text>
       ))}
 
+      <path className="data-area" d={areaPath} />
       {fitPath ? <path className="fit-line" d={fitPath} /> : null}
       <path className="data-line" d={linePath} />
 

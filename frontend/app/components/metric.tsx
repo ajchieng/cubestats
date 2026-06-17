@@ -9,10 +9,19 @@ export function Metric({
   value: string | number | null | undefined;
   rank?: RankPositions | null;
 }) {
+  const displayValue = value ?? "N/A";
+  const valueParts =
+    typeof displayValue === "string"
+      ? displayValue.match(/^(.*?)\s+\((.*?)\)$/)
+      : null;
+
   return (
     <div className="metric">
       <p className="label">{label}</p>
-      <p className="metric-value">{value ?? "N/A"}</p>
+      <p className="metric-value">{valueParts ? valueParts[1] : displayValue}</p>
+      {valueParts ? (
+        <p className="metric-detail">({valueParts[2]})</p>
+      ) : null}
       <RankBadges rank={rank} />
     </div>
   );

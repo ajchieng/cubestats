@@ -18,6 +18,26 @@ const AVERAGE_CHART_OPTIONS: { mode: AverageChartMode; label: string }[] = [
   { mode: "1y", label: "1Y" },
 ];
 
+const EVENT_SHORT_LABELS: Record<string, string> = {
+  "333": "3x3",
+  "222": "2x2",
+  "444": "4x4",
+  "555": "5x5",
+  "666": "6x6",
+  "777": "7x7",
+  "333oh": "OH",
+  "333bf": "3BLD",
+  pyram: "Pyra",
+  skewb: "Skewb",
+  minx: "Mega",
+  clock: "Clock",
+  sq1: "SQ1",
+  "444bf": "4BLD",
+  "555bf": "5BLD",
+  "333mbf": "MBLD",
+  "333fm": "FM",
+};
+
 export function CompetitorDashboard({
   profile,
   selectedEvent,
@@ -37,32 +57,51 @@ export function CompetitorDashboard({
   onAverageChartModeChange: (mode: AverageChartMode) => void;
   onResultsPageChange: (page: number) => void;
 }) {
+  const totalCompetitions = new Set(
+    profile.events.flatMap((event) =>
+      event.result_rows
+        .map((row) => row.competition_id)
+        .filter((competitionId) => competitionId.length > 0)
+    )
+  ).size;
+  const kinchScore = profile.all_around?.kinch.overall;
+
   return (
     <section className="dashboard" aria-label="Competitor progression">
-      <div className="summary-panel">
-        <div>
+      <div className="profile-hero">
+        <div className="profile-heading">
           <p className="label">Competitor</p>
           <h2>{profile.name}</h2>
-          <p className="muted">{profile.wca_id}</p>
+          <div className="profile-meta">
+            <span>{profile.wca_id}</span>
+            <span>{totalCompetitions.toLocaleString()} competitions</span>
+          </div>
         </div>
 
-        <div className="event-picker">
-          <label htmlFor="event-id">Event</label>
-          <select
-            id="event-id"
-            value={selectedEvent.event_id}
-            onChange={(event) => {
-              onSelectEvent(event.target.value);
+        {typeof kinchScore === "number" ? (
+          <div className="hero-kinch" aria-label="Kinch all-around score">
+            <p className="label">Kinch all-around</p>
+            <p className="kinch-value">{kinchScore.toFixed(2)}</p>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="event-tabs" role="tablist" aria-label="Events">
+        {profile.events.map((event) => (
+          <button
+            aria-selected={event.event_id === selectedEvent.event_id}
+            className={event.event_id === selectedEvent.event_id ? "active" : ""}
+            key={event.event_id}
+            onClick={() => {
+              onSelectEvent(event.event_id);
               onResultsPageChange(1);
             }}
+            role="tab"
+            type="button"
           >
-            {profile.events.map((event) => (
-              <option key={event.event_id} value={event.event_id}>
-                {event.name}
-              </option>
-            ))}
-          </select>
-        </div>
+            {EVENT_SHORT_LABELS[event.event_id] ?? event.name}
+          </button>
+        ))}
       </div>
 
       <div className="stat-grid">
@@ -106,12 +145,6 @@ export function CompetitorDashboard({
         />
       </div>
 
-      {profile.all_around ? (
-        <AllAroundPanel allAround={profile.all_around} />
-      ) : null}
-
-      <MilestonesStrip event={selectedEvent} />
-
       <div className="charts-grid">
         <SeriesChart
           title="PB progression"
@@ -120,6 +153,11 @@ export function CompetitorDashboard({
           points={selectedEvent.pb_progression}
           showFit
           emptyLabel="No dated PB progression points."
+        />
+        <SolveHistogram
+          unit={selectedEvent.unit}
+          values={selectedEvent.solve_values}
+          meanValue={selectedEvent.stats.average_solve_value}
         />
         <SeriesChart
           title={`${selectedEvent.average_label} results`}
@@ -153,11 +191,11 @@ export function CompetitorDashboard({
         />
       </div>
 
-      <SolveHistogram
-        unit={selectedEvent.unit}
-        values={selectedEvent.solve_values}
-        meanValue={selectedEvent.stats.average_solve_value}
-      />
+      {profile.all_around ? (
+        <AllAroundPanel allAround={profile.all_around} />
+      ) : null}
+
+      <MilestonesStrip event={selectedEvent} />
 
       <ActivityHeatmap events={profile.events} />
 

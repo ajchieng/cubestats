@@ -37,37 +37,32 @@ export function AllAroundPanel({ allAround }: { allAround: AllAround }) {
   const { kinch, sum_of_ranks: sor } = allAround;
 
   return (
-    <section className="chart-panel all-around-panel" aria-label="All-around profile">
-      <div className="panel-title-row">
-        <h3>All-around profile</h3>
-        <span className="unit-label">% of world record</span>
+    <section className="all-around-section" aria-label="All-around profile">
+      <div className="chart-panel all-around-radar-card">
+        <div className="panel-title-row">
+          <h3>Event strength</h3>
+          <span className="unit-label">% of world record</span>
+        </div>
+        <KinchRadar events={kinch.events} />
       </div>
 
-      <div className="all-around-grid">
-        <div className="all-around-summary">
-          <div className="kinch-headline">
-            <p className="label">Kinch score</p>
-            <p className="kinch-value">
-              {kinch.overall === null ? "N/A" : kinch.overall.toFixed(2)}
-            </p>
-            <p className="milestone-detail">
-              Mean % of the world record across all {kinch.event_count} current
-              events.
-            </p>
-          </div>
-
-          <div className="sor-block">
-            <p className="label">Sum of ranks</p>
-            <SorRow label="Single" group={sor.single} />
-            <SorRow label="Average" group={sor.average} />
-            <p className="milestone-detail">
-              Summed across {sor.single.event_count} ranked event
-              {sor.single.event_count === 1 ? "" : "s"} (lower is better).
-            </p>
-          </div>
+      <div className="chart-panel kinch-card">
+        <div className="kinch-headline">
+          <p className="label">Kinch score</p>
+          <p className="kinch-value">
+            {kinch.overall === null ? "N/A" : kinch.overall.toFixed(2)}
+          </p>
+          <p className="milestone-detail">
+            Mean % of the world record across {kinch.event_count} current
+            events.
+          </p>
         </div>
 
-        <KinchRadar events={kinch.events} />
+        <div className="sor-block">
+          <p className="label">Sum of ranks</p>
+          <SorRow label="Single" group={sor.single} />
+          <SorRow label="Average" group={sor.average} />
+        </div>
       </div>
     </section>
   );

@@ -42,7 +42,7 @@ export function ThemeToggle() {
       // Avoid a hydration mismatch: render a stable label until mounted.
       suppressHydrationWarning
     >
-      {!mounted ? "Theme" : theme === "dark" ? "☀ Light" : "🌙 Dark"}
+      {!mounted ? "Theme" : theme === "dark" ? "Light" : "Dark"}
     </button>
   );
 }

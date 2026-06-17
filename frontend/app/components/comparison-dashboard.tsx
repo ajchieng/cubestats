@@ -8,7 +8,7 @@ import type {
 import { formatDnfRate } from "../lib/result-utils";
 import { ComparisonChart } from "./charts";
 
-const COMPARE_COLORS = ["#145f76", "#c2410c"] as const;
+const COMPARE_COLORS = ["#2563eb", "#f97316"] as const;
 
 export function ComparisonDashboard({
   primary,
