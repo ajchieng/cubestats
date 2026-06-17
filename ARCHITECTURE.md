@@ -35,6 +35,7 @@ rich, per-event view of their official competition history:
 
 - Personal-best (PB) progression over time (single and average).
 - Summary statistics (PB, best average, mean/median solve, consistency, DNF rate, world/continental/national rank).
+- An **all-around profile**: a **Kinch score** + **Sum of Ranks**, with an event-strength **radar chart**.
 - A distribution histogram of every solve.
 - A "records & milestones" strip (biggest PB drop, longest gap, sub-X barriers crossed).
 - A month-by-month activity heatmap across all events.
@@ -59,8 +60,8 @@ reads public WCA results from a third-party static JSON mirror and reshapes them
 
 1. The **browser** (a Next.js client component) takes a WCA ID and calls the backend.
 2. The **backend** fetches that person's full results file, fetches metadata for every
-   competition they attended (for dates/names), then crunches everything into a clean,
-   display-ready shape.
+   competition they attended (for dates/names) plus the world record for each of their
+   events (for the Kinch score), then crunches everything into a clean, display-ready shape.
 3. The browser renders charts, tables, and stats from that single JSON response — all
    chart math (SVG paths, regression fits, bucketing, the heatmap) happens client-side.
 
@@ -120,9 +121,12 @@ cubestats/
 │   └── setup.sh                 # venv + dependency bootstrap
 ├── backend/
 │   ├── requirements.txt         # Python deps
+│   ├── requirements-dev.txt     # + pytest / pytest-asyncio / respx for tests
+│   ├── pytest.ini               # pytest config (asyncio auto mode, pythonpath)
 │   ├── main.py                  # FastAPI app: routes + Pydantic response models
 │   ├── services/
 │   │   └── wca_api.py           # ALL the data fetching + parsing + stats logic
+│   ├── tests/                   # pytest suite (parsing, all-around, fetch layer)
 │   └── utils/
 │       └── time_format.py       # format_centiseconds helper (used by legacy endpoint)
 └── frontend/
@@ -131,13 +135,26 @@ cubestats/
     ├── tsconfig.json            # strict TS, bundler module resolution
     └── app/
         ├── layout.tsx           # Root HTML shell + metadata
-        ├── page.tsx             # THE ENTIRE UI (every component lives here)
+        ├── page.tsx             # Search state + top-level view orchestration
+        ├── components/
+        │   ├── all-around.tsx   # Kinch + Sum of Ranks summary and strength radar
+        │   ├── analytics.tsx    # Milestones + activity heatmap
+        │   ├── charts.tsx       # Series, comparison, and histogram charts
+        │   ├── comparison-dashboard.tsx
+        │   ├── competitor-dashboard.tsx
+        │   ├── metric.tsx
+        │   └── results-table.tsx
+        ├── lib/
+        │   ├── api.ts           # Backend fetch + error mapping
+        │   ├── chart-utils.ts   # Chart geometry, bucketing, fits, formatting
+        │   ├── result-utils.ts  # Result display and Ao5 helpers
+        │   └── types.ts         # Shared API and chart types
         └── globals.css          # All styling
 ```
 
-Two files hold essentially the whole application: **`backend/services/wca_api.py`**
-(data + logic) and **`frontend/app/page.tsx`** (UI + chart math). `main.py` is a thin
-HTTP layer; everything else is glue.
+The backend's data logic remains concentrated in **`backend/services/wca_api.py`**.
+The frontend is split by responsibility: `page.tsx` owns orchestration, `components/`
+owns rendering, and `lib/` owns shared types and pure utilities.
 
 ---
 
@@ -179,7 +196,7 @@ static JSON files served from GitHub raw:
 BASE_URL = https://raw.githubusercontent.com/robiningelbrecht/wca-rest-api/refs/heads/v1
 ```
 
-Two file types are consumed:
+Three file types are consumed:
 
 - **`/persons/{WCA_ID}.json`** — one competitor: their name, `rank` block, and a
   `results` object keyed by competition ID. Each competition maps event IDs → arrays of
@@ -187,6 +204,10 @@ Two file types are consumed:
 - **`/competitions/{COMPETITION_ID}.json`** — one competition: its `name` and `date`
   (`{from, till}`). Used to attach human-readable names and dates to the results (the
   person file does not contain competition dates).
+- **`/rank/world/{single|average}/{EVENT_ID}.json`** — the world ranking for an event,
+  sorted best-first, so **the world record is always `items[0].best`**. Fetched only for
+  the events a competitor competes in, and used as the denominator for the Kinch score
+  (see §7.9). These files are static and change rarely, so they are aggressively cached.
 
 Every request carries a polite `User-Agent` header that credits the upstream API author.
 This is a **static, unauthenticated, public** dataset — no API keys, no rate-limit auth.
@@ -202,9 +223,15 @@ plumbing in [`backend/main.py`](backend/main.py).
 - `BASE_URL`, `EVENT_333`, `WCA_ID_PATTERN` (`^\d{4}[A-Z]{4}\d{2}$`), `REQUEST_HEADERS`.
 - `EVENT_NAMES` — maps event IDs (`333`, `222`, `333bf`, `minx`, …) to display names.
 - `EVENT_ORDER` — canonical ordering so events always render in the familiar WCA order.
+- `CURRENT_EVENTS` / `_CURRENT_EVENT_SET` — the **17 events the WCA currently holds**.
+  Used as the denominator for all-around metrics; deprecated events (`333ft`, `magic`,
+  `mmagic`) are deliberately excluded so scores match the community-standard definition.
 - `_competition_cache: Dict[str, Dict]` — a **process-lifetime in-memory cache** of
   fetched competition metadata, so repeated lookups (across requests) don't refetch the
   same competition file.
+- `_world_record_cache: Dict[str, Optional[int]]` — a process-lifetime cache of world
+  records keyed by `"{single|average}/{event_id}"`. Records change rarely, so the first
+  request that needs them pays the fetch cost and the rest are free.
 
 ### 7.2 Error taxonomy
 A small exception hierarchy that the route layer maps to HTTP status codes:
@@ -239,7 +266,10 @@ A small exception hierarchy that the route layer maps to HTTP status codes:
 5. For each event the person has results in (`_event_ids_from_results`, sorted by
    `EVENT_ORDER`), call `_build_event_progression`.
 6. Drop events with zero rounds; if nothing remains → `No333ResultsError`.
-7. Return `{wca_id, name, events}`.
+7. `fetch_world_records` for the competitor's current events, then `_build_all_around`
+   (Kinch + Sum of Ranks — see §7.9). A world-record fetch failure is swallowed so it can
+   never break the core response; Sum of Ranks still works without it.
+8. Return `{wca_id, name, events, all_around}`.
 
 ### 7.5 The heavy lifter: `_build_event_progression(event_id, results, competitions, rank_data)`
 This is where raw WCA integers become charts. Step by step:
@@ -297,6 +327,29 @@ but the UI uses the richer `/progression` endpoint.
 ### 7.8 `utils/time_format.py`
 A single helper `format_centiseconds(value) -> "SS.ss"`, used by the legacy 333-PB
 endpoint. The progression path uses the more capable formatters inside `wca_api.py`.
+
+### 7.9 All-around metrics: `_build_all_around`
+Two whole-competitor "all-around" metrics, computed once per request from the already-built
+events plus the fetched world records:
+
+- **`fetch_world_records(event_ids)`** — for each current event the competitor does, GETs
+  `/rank/world/single/{event}.json` and (except for `333mbf`) `/rank/world/average/{event}.json`
+  concurrently (semaphore of 8, shared client), reading `items[0].best` as the record.
+  Cached in `_world_record_cache`; fault-tolerant per file (any error → `None`).
+- **Kinch score** (`_kinch_for_event`) — each event is scored **0–100 as a percentage of
+  the world record**. It prefers the **average** basis (`100 × WR_avg / PR_avg`) and falls
+  back to **single** when the competitor has no average. **Multi-Blind** is special-cased to
+  use **net points** (`_decode_mbf_points`: `99 − raw // 10_000_000`), since its packed
+  score isn't linear. Scores are clamped at 100. The **overall** Kinch is the sum of all
+  event scores divided by **17** (`len(CURRENT_EVENTS)`), so events not competed count as 0.
+- **Sum of Ranks** (`_sum_of_ranks`) — sums the competitor's **world / continent / country**
+  rank across their current events, separately for **single** and **average**. It reads the
+  ranks already present in each event's stats, so it needs **no extra fetches**. It is
+  computed over **competed events only** (it does not penalize missing events with a
+  "last place + 1" placeholder).
+
+`_build_all_around` returns `{kinch: {overall, event_count, events[]}, sum_of_ranks:
+{single, average}}`. Per-event Kinch scores (with their `basis`) drive the radar chart.
 
 ---
 
@@ -374,7 +427,20 @@ FastAPI app in [`backend/main.py`](backend/main.py). CORS allows origin
       "average_points":  [ ProgressionPoint, … ],   // every round average, chronological
       "result_rows":     [ ResultRow, … ]           // every round, most-recent-first
     }
-  ]
+  ],
+  "all_around": {                          // nullable; whole-competitor metrics
+    "kinch": {
+      "overall": 52.02,                    // mean % of WR over all 17 events (nullable)
+      "event_count": 17,
+      "events": [                          // only events with a score, for the radar
+        { "event_id": "333", "name": "3x3 Cube", "score": 78.4, "basis": "average" }
+      ]
+    },
+    "sum_of_ranks": {
+      "single":  { "world": 13120, "continent": 4200, "country": 90, "event_count": 17 },
+      "average": { "world": 14005, "continent": 4510, "country": 96, "event_count": 17 }
+    }
+  }
 }
 ```
 
@@ -383,6 +449,8 @@ Supporting shapes:
 - **`ResultValue`**: `{raw_value, value, display}`.
 - **`ResultRow`**: `{date, competition_id, competition_name, round, format, best, average, attempts: ResultValue[]}`.
 - **`RankPositions`**: `{world, continent, country}` (each nullable).
+- **`KinchEventScore`**: `{event_id, name, score, basis}` where `basis` is `"average" | "single" | "points"`.
+- **`SumOfRanksGroup`**: `{world, continent, country, event_count}` (sums nullable).
 
 Errors come back as FastAPI's `{"detail": "…"}` with status 400/404/502.
 
@@ -390,14 +458,17 @@ Errors come back as FastAPI's `{"detail": "…"}` with status 400/404/502.
 
 ## 10. Frontend deep-dive
 
-The **entire UI** is [`frontend/app/page.tsx`](frontend/app/page.tsx) — one client
-component plus a flat list of helper components and pure functions.
+[`frontend/app/page.tsx`](frontend/app/page.tsx) is the client entry point and owns
+search state plus the single/comparison render branch. Feature UI lives in
+[`frontend/app/components`](frontend/app/components), while API access, shared types,
+and pure data/chart helpers live in [`frontend/app/lib`](frontend/app/lib).
 [`layout.tsx`](frontend/app/layout.tsx) is just the HTML shell + `<title>`/metadata.
 
 ### 10.1 Types
-TypeScript types at the top mirror the backend Pydantic models exactly
+TypeScript types in `app/lib/types.ts` mirror the backend Pydantic models exactly
 (`EventStats`, `ProgressionPoint`, `ResultRow`, `EventProgression`,
-`CompetitorProgression`, `RankPositions`, …). Two UI-only types:
+`CompetitorProgression`, `RankPositions`, `AllAround`, `KinchScore`,
+`KinchEventScore`, `SumOfRanks`, `SumOfRanksGroup`, …). Two UI-only types:
 `ChartMode = "date" | "index"` and `AverageChartMode = "raw" | "1m" | "6m" | "1y"`.
 
 ### 10.2 Constants
@@ -477,6 +548,15 @@ Cards for current PB, best average, mean/median solve, **consistency (σ)**,
 also render **rank badges** (`NR` country / `CR` continent / `WR` world) via `RankBadges`,
 hidden when the competitor is unranked.
 
+### All-around profile (`AllAroundPanel` + `KinchRadar`)
+Rendered right after the summary grid, from `profile.all_around` (hidden if it's null).
+It shows the **overall Kinch score** as a headline number, a **Sum of Ranks** block
+(single & average, each with NR/CR/WR badges reusing the metric-card badge styling), and
+an **event-strength radar** — a hand-rolled SVG (rings at 25/50/75/100, one axis per
+scored event, a filled polygon, per-point tooltips, short event labels). The radar needs
+≥ 3 scored events; below that it shows a small empty state. All the math (Kinch, SoR) is
+done backend-side; the frontend only lays it out.
+
 ### Records & milestones strip (`MilestonesStrip` + `buildMilestones`)
 Computed entirely client-side from `pb_progression` (singles only):
 - **Single PBs set** (count) with current PB.
@@ -535,9 +615,11 @@ milestones, heatmap, full table) to stay focused.
 
 - **CORS.** Backend restricts to `http://localhost:3000`, `GET` only. Change this for any
   non-local deployment.
-- **Caching.** `_competition_cache` is an in-memory dict keyed by competition ID, shared
-  across requests for the process lifetime. It **does not persist** across restarts and
-  has no eviction. Person/results files are *not* cached.
+- **Caching.** `_competition_cache` (by competition ID) and `_world_record_cache` (by
+  `"{single|average}/{event_id}"`) are in-memory dicts shared across requests for the
+  process lifetime. Neither **persists** across restarts nor has eviction — so world
+  records are effectively frozen until the process restarts. Person/results files are
+  *not* cached.
 - **Concurrency.** Competition fetches run in parallel, capped at 8 by a semaphore, under
   a single shared `httpx.AsyncClient` with a 10s timeout.
 - **Fault tolerance.** A failed competition fetch degrades to id-as-name with no date,
@@ -555,14 +637,25 @@ milestones, heatmap, full table) to stay focused.
 
 ## 13. Known limitations & gotchas
 
-- **No tests.** The parsing in `wca_api.py` (DNF counting, normalization, rank extraction,
-  MBF/FM encodings) has zero automated coverage and is the most fragile code.
+- **Backend tests, no frontend tests.** `wca_api.py` (normalization, DNF counting, rank
+  extraction, MBF/FM encodings, Kinch/Sum-of-Ranks, and the fetch layer with the upstream
+  mocked) is covered by a `pytest` suite under `backend/tests/` — run it with
+  `python -m pytest` from `backend/` after installing `requirements-dev.txt`. The frontend
+  (chart math, bucketing, regression fits) still has no automated coverage.
 - **No persistence / no DB.** Everything is recomputed per request; the only cache is the
   volatile competition dict.
 - **Upstream coupling.** Entirely dependent on the third-party GitHub JSON mirror's
   availability, freshness, and schema. There's no fallback source.
 - **MBF (`333mbf`) is a second-class citizen.** Its packed score isn't decoded into the
-  human "X/Y in T" format; time-style stats/barriers are skipped or approximate.
+  human "X/Y in T" format; time-style stats/barriers are skipped or approximate. (The
+  Kinch path *does* decode net points via `_decode_mbf_points`, but only for scoring.)
+- **Sum of Ranks counts competed events only.** It does not penalize events a competitor
+  has never done (no "last place + 1" placeholder), so two competitors' SoRs aren't
+  directly comparable unless they compete in the same set of events. The UI labels the
+  contributing event count to make this explicit.
+- **Kinch depends on world-record freshness.** Scores are relative to `items[0]` of the
+  upstream `rank/world` files and to the cached records, so they drift if the mirror or
+  the cache is stale.
 - **`tsconfig` `target: es5`** triggers a TypeScript deprecation warning on type-check
   (harmless today; will need bumping eventually).
 - **CORS + `API_BASE_URL` are hard-coded to localhost** — both must change to deploy.
@@ -586,6 +679,8 @@ milestones, heatmap, full table) to stay focused.
 | **MBF / `333mbf`** | Multi-Blind — packed score; opaque "score" unit here. |
 | **σ (sigma)** | Population standard deviation of singles — the "consistency" metric. |
 | **WR / CR / NR** | World / Continental / National rank position. |
+| **Kinch score** | An all-around metric: each event scored 0–100 as a % of the world record, averaged over all 17 current events (missing events count as 0). |
+| **Sum of Ranks (SoR)** | The sum of a competitor's world/continent/country ranks across events — lower is better. Here, summed over competed events only. |
 | **Progression point** | One `{date, value, …}` sample on a chart line. |
 | **Running best** | A series that only appends when the value improves (used for PBs). |
 ```

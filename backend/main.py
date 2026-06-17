@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import List, Literal, Optional
 
 from fastapi import FastAPI, HTTPException
@@ -97,17 +98,59 @@ class EventProgression(BaseModel):
     result_rows: List[ResultRow]
 
 
+class KinchEventScore(BaseModel):
+    event_id: str
+    name: str
+    score: float
+    basis: Literal["average", "single", "points"]
+
+
+class KinchScore(BaseModel):
+    overall: Optional[float]
+    event_count: int
+    events: List[KinchEventScore]
+
+
+class SumOfRanksGroup(BaseModel):
+    world: Optional[int]
+    continent: Optional[int]
+    country: Optional[int]
+    event_count: int
+
+
+class SumOfRanks(BaseModel):
+    single: SumOfRanksGroup
+    average: SumOfRanksGroup
+
+
+class AllAround(BaseModel):
+    kinch: KinchScore
+    sum_of_ranks: SumOfRanks
+
+
 class CompetitorProgression(BaseModel):
     wca_id: str
     name: str
     events: List[EventProgression]
+    all_around: Optional[AllAround] = None
 
 
 app = FastAPI(title="Cubestats API")
 
+
+def _allowed_origins() -> list[str]:
+    """Resolve CORS origins from CUBESTATS_ALLOWED_ORIGINS (comma-separated).
+
+    Falls back to the local dev frontend when the variable is unset, so local
+    development keeps working without any configuration.
+    """
+    raw = os.environ.get("CUBESTATS_ALLOWED_ORIGINS", "http://localhost:3000")
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=_allowed_origins(),
     allow_credentials=True,
     allow_methods=["GET"],
     allow_headers=["*"],

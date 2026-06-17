@@ -8,6 +8,7 @@
     "setup": "bash ./scripts/setup.sh",
     "dev": "npm run setup --silent && npx concurrently \"bash -c 'cd backend && ./venv/bin/python -m uvicorn main:app'\" \"npm --prefix frontend run dev\"",
     "start-backend": "bash -c 'cd backend && ./venv/bin/python -m uvicorn main:app'",
+    "start-backend-prod": "bash -c 'cd backend && ./venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}'",
     "start-frontend": "npm --prefix frontend run dev"
   }
 }

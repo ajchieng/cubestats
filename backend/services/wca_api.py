@@ -69,7 +69,34 @@ EVENT_ORDER = {
     )
 }
 
+# The 17 events the WCA currently holds, used as the denominator for all-around
+# metrics (Kinch score, Sum of Ranks). Deprecated events (333ft, magic, mmagic)
+# are intentionally excluded so scores match the community-standard definition.
+CURRENT_EVENTS = [
+    "333",
+    "222",
+    "444",
+    "555",
+    "666",
+    "777",
+    "333bf",
+    "333fm",
+    "333oh",
+    "clock",
+    "minx",
+    "pyram",
+    "skewb",
+    "sq1",
+    "444bf",
+    "555bf",
+    "333mbf",
+]
+_CURRENT_EVENT_SET = set(CURRENT_EVENTS)
+
 _competition_cache: Dict[str, Dict[str, Any]] = {}
+# World records change rarely, so cache them for the process lifetime keyed by
+# "{rank_type}/{event_id}" (e.g. "single/333"). Value is the raw record, or None.
+_world_record_cache: Dict[str, Optional[int]] = {}
 
 
 class WCAAPIError(Exception):
@@ -184,10 +211,224 @@ async def get_competitor_progression(wca_id: str) -> Dict[str, Any]:
             f"No official WCA results were found for WCA ID {normalized_wca_id}."
         )
 
+    competed_current = [
+        event["event_id"] for event in events if event["event_id"] in _CURRENT_EVENT_SET
+    ]
+    world_records: Dict[str, Dict[str, Optional[int]]] = {}
+    if competed_current:
+        try:
+            world_records = await fetch_world_records(competed_current)
+        except Exception:
+            # All-around is a bonus view; never let a record fetch break the
+            # core progression response. Sum of Ranks still works without it.
+            world_records = {}
+
     return {
         "wca_id": normalized_wca_id,
         "name": str(person.get("name") or "Unknown competitor"),
         "events": events,
+        "all_around": _build_all_around(events, world_records),
+    }
+
+
+async def fetch_world_records(
+    event_ids: List[str],
+) -> Dict[str, Dict[str, Optional[int]]]:
+    """Fetch the world-record single (and average) for each event.
+
+    The upstream `rank/world/{single,average}/{event}.json` files are sorted
+    best-first, so the record is always the first item. Results are cached for
+    the process lifetime and fetched concurrently.
+    """
+    targets: List[Tuple[str, str]] = []
+    for event_id in dict.fromkeys(event_ids):
+        targets.append((event_id, "single"))
+        # 333mbf has no average ranking; everything else does.
+        if event_id != "333mbf":
+            targets.append((event_id, "average"))
+
+    if not targets:
+        return {}
+
+    async with httpx.AsyncClient(timeout=10.0, headers=REQUEST_HEADERS) as client:
+        semaphore = asyncio.Semaphore(8)
+
+        async def fetch_one(
+            event_id: str, rank_type: str
+        ) -> Tuple[str, str, Optional[int]]:
+            cache_key = f"{rank_type}/{event_id}"
+            if cache_key in _world_record_cache:
+                return event_id, rank_type, _world_record_cache[cache_key]
+
+            async with semaphore:
+                best = await _fetch_world_record(client, event_id, rank_type)
+                _world_record_cache[cache_key] = best
+                return event_id, rank_type, best
+
+        triples = await asyncio.gather(
+            *(fetch_one(event_id, rank_type) for event_id, rank_type in targets)
+        )
+
+    records: Dict[str, Dict[str, Optional[int]]] = {}
+    for event_id, rank_type, best in triples:
+        records.setdefault(event_id, {})[rank_type] = best
+    return records
+
+
+async def _fetch_world_record(
+    client: httpx.AsyncClient, event_id: str, rank_type: str
+) -> Optional[int]:
+    url = f"{BASE_URL}/rank/world/{rank_type}/{event_id}.json"
+
+    try:
+        response = await client.get(url)
+    except httpx.RequestError:
+        return None
+
+    if response.status_code >= 400:
+        return None
+
+    try:
+        data = response.json()
+    except ValueError:
+        return None
+
+    if not isinstance(data, dict):
+        return None
+
+    items = data.get("items")
+    if not isinstance(items, list) or not items:
+        return None
+
+    first = items[0]
+    if not isinstance(first, dict):
+        return None
+
+    return _valid_result_value(first.get("best"))
+
+
+def _decode_mbf_points(raw: Optional[int]) -> Optional[int]:
+    """Decode a packed Multi-Blind result into net points (solved − missed).
+
+    WCA encodes new-format MBF as ``DD SSSSS MM`` where ``DD = 99 − points``,
+    so the points are recovered as ``99 − raw // 10_000_000``.
+    """
+    if not isinstance(raw, int) or raw <= 0:
+        return None
+
+    points = 99 - raw // 10_000_000
+    return points if points > 0 else None
+
+
+def _kinch_for_event(
+    event_id: str,
+    pr_single: Optional[float],
+    pr_average: Optional[float],
+    wr_single: Optional[int],
+    wr_average: Optional[int],
+) -> Tuple[Optional[float], Optional[str]]:
+    """Score one event 0–100 as a percentage of the world record.
+
+    Returns ``(score, basis)`` where basis is "average", "single" or "points".
+    Prefers the average (the standard Kinch basis); falls back to single when no
+    average exists. Multi-Blind is scored on net points instead of time.
+    """
+    if event_id == "333mbf":
+        wr_points = _decode_mbf_points(wr_single)
+        pr_points = (
+            _decode_mbf_points(int(pr_single)) if pr_single is not None else None
+        )
+        if wr_points and pr_points:
+            return min(100.0, 100.0 * pr_points / wr_points), "points"
+        return None, None
+
+    wr_average_value = _normalized_value(event_id, wr_average)
+    if wr_average_value and pr_average:
+        return min(100.0, 100.0 * wr_average_value / pr_average), "average"
+
+    wr_single_value = _normalized_value(event_id, wr_single)
+    if wr_single_value and pr_single:
+        return min(100.0, 100.0 * wr_single_value / pr_single), "single"
+
+    return None, None
+
+
+def _sum_of_ranks(events: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Sum world/continent/country rank across the competitor's current events."""
+    groups: Dict[str, Any] = {}
+
+    for rank_type, stats_key in (("single", "single_rank"), ("average", "average_rank")):
+        totals = {"world": 0, "continent": 0, "country": 0}
+        event_count = 0
+
+        for event in events:
+            if event["event_id"] not in _CURRENT_EVENT_SET:
+                continue
+
+            rank = event["stats"].get(stats_key)
+            if not isinstance(rank, dict) or not isinstance(rank.get("world"), int):
+                continue
+
+            event_count += 1
+            for region in totals:
+                value = rank.get(region)
+                if isinstance(value, int):
+                    totals[region] += value
+
+        groups[rank_type] = {
+            "world": totals["world"] if event_count else None,
+            "continent": totals["continent"] if event_count else None,
+            "country": totals["country"] if event_count else None,
+            "event_count": event_count,
+        }
+
+    return groups
+
+
+def _build_all_around(
+    events: List[Dict[str, Any]],
+    world_records: Dict[str, Dict[str, Optional[int]]],
+) -> Dict[str, Any]:
+    kinch_events: List[Dict[str, Any]] = []
+    score_total = 0.0
+
+    for event in events:
+        event_id = event["event_id"]
+        if event_id not in _CURRENT_EVENT_SET:
+            continue
+
+        stats = event["stats"]
+        records = world_records.get(event_id, {})
+        score, basis = _kinch_for_event(
+            event_id,
+            stats.get("current_pb_value"),
+            stats.get("best_average_value"),
+            records.get("single"),
+            records.get("average"),
+        )
+
+        if score is None:
+            continue
+
+        score_total += score
+        kinch_events.append(
+            {
+                "event_id": event_id,
+                "name": event["name"],
+                "score": round(score, 2),
+                "basis": basis,
+            }
+        )
+
+    overall = round(score_total / len(CURRENT_EVENTS), 2) if kinch_events else None
+
+    return {
+        "kinch": {
+            "overall": overall,
+            "event_count": len(CURRENT_EVENTS),
+            "events": kinch_events,
+        },
+        "sum_of_ranks": _sum_of_ranks(events),
     }
 
 
