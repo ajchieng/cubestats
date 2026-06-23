@@ -722,10 +722,9 @@ function calculateHeadToHead(
     }
 
     shared += 1;
-    const higherIsBetter = isHigherBetterEvent(event);
-    if ((higherIsBetter && a > b) || (!higherIsBetter && a < b)) {
+    if (a < b) {
       primaryWins += 1;
-    } else if ((higherIsBetter && b > a) || (!higherIsBetter && b < a)) {
+    } else if (b < a) {
       secondaryWins += 1;
     } else {
       ties += 1;
@@ -888,11 +887,7 @@ function clamp01(value: number) {
 }
 
 function isLowerBetterUnit(unit: string) {
-  return unit !== "score";
-}
-
-function isHigherBetterEvent(event: EventProgression) {
-  return event.unit === "score" || event.event_id === "333mbf";
+  return true;
 }
 
 function valueOrNa(value: string | null | undefined) {
