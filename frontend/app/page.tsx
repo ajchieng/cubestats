@@ -9,6 +9,10 @@ import { DashboardSkeleton } from "./components/skeleton";
 import { ThemeToggle } from "./components/theme-toggle";
 import { errorText, fetchProgression } from "./lib/api";
 import { buildAverageChartConfig } from "./lib/chart-utils";
+import {
+  exportComparisonReport,
+  exportCompetitorReport,
+} from "./lib/pdf-report";
 import { useRecentSearches } from "./lib/recent-searches";
 import type {
   AverageChartConfig,
@@ -29,6 +33,7 @@ export default function Home() {
   const [resultsPage, setResultsPage] = useState(1);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [exportError, setExportError] = useState("");
 
   const wcaInputRef = useRef<HTMLInputElement>(null);
   const { recent, remember } = useRecentSearches();
@@ -77,6 +82,7 @@ export default function Home() {
 
     setIsLoading(true);
     setError("");
+    setExportError("");
     setProfile(null);
     setCompareProfile(null);
 
@@ -129,6 +135,40 @@ export default function Home() {
     setWcaId(pickedId);
     setCompareId("");
     runSearch(pickedId, "");
+  }
+
+  function handleExportCompetitorReport() {
+    if (!profile || !selectedEvent || !averageChart) {
+      return;
+    }
+
+    try {
+      setExportError("");
+      exportCompetitorReport({
+        profile,
+        event: selectedEvent,
+        averagePoints: averageChart.points,
+      });
+    } catch {
+      setExportError("Could not export PDF. Try again.");
+    }
+  }
+
+  function handleExportComparisonReport() {
+    if (!profile || !compareProfile) {
+      return;
+    }
+
+    try {
+      setExportError("");
+      exportComparisonReport({
+        primary: profile,
+        secondary: compareProfile,
+        eventId: selectedEventId,
+      });
+    } catch {
+      setExportError("Could not export PDF. Try again.");
+    }
   }
 
   return (
@@ -236,6 +276,12 @@ export default function Home() {
           </p>
         ) : null}
 
+        {exportError ? (
+          <p className="message error" role="alert">
+            {exportError}
+          </p>
+        ) : null}
+
         {isLoading ? (
           <DashboardSkeleton />
         ) : profile && compareProfile ? (
@@ -244,6 +290,7 @@ export default function Home() {
             secondary={compareProfile}
             selectedEventId={selectedEventId}
             onSelectEvent={setSelectedEventId}
+            onExportPdf={handleExportComparisonReport}
           />
         ) : profile && selectedEvent ? (
           <CompetitorDashboard
@@ -255,6 +302,7 @@ export default function Home() {
             onSelectEvent={setSelectedEventId}
             onAverageChartModeChange={setAverageChartMode}
             onResultsPageChange={setResultsPage}
+            onExportPdf={handleExportCompetitorReport}
           />
         ) : (
           <LandingPanel onPick={handlePick} />

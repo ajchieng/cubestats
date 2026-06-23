@@ -1,4 +1,4 @@
-import { Fragment, useMemo } from "react";
+import { Fragment, useId, useMemo } from "react";
 import type {
   ChartPoint,
   EventProgression,
@@ -235,6 +235,7 @@ function monthYear(date: string | null) {
 
 export function ActivityHeatmap({ events }: { events: EventProgression[] }) {
   const data = useMemo(() => buildActivity(events), [events]);
+  const descriptionId = useId();
 
   const header = (
     <div className="panel-title-row">
@@ -252,12 +253,33 @@ export function ActivityHeatmap({ events }: { events: EventProgression[] }) {
     );
   }
 
+  const monthDetails = data.years.flatMap((year) =>
+    HEATMAP_MONTHS.map((month, monthIndex) => {
+      const key = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+      const entry = data.byMonth.get(key);
+      const solves = entry?.solves ?? 0;
+      const competitions = entry?.competitions ?? 0;
+      const competitionText = competitions
+        ? ` across ${competitions} competition${competitions === 1 ? "" : "s"}`
+        : "";
+
+      return `${month} ${year}: ${solves} solve${
+        solves === 1 ? "" : "s"
+      }${competitionText}.`;
+    })
+  );
+
   return (
     <section className="chart-panel">
       {header}
 
       <div className="heatmap-scroll">
-        <div className="heatmap" role="img" aria-label="Solves per month, all events">
+        <div
+          className="heatmap"
+          role="img"
+          aria-describedby={descriptionId}
+          aria-label="Solves per month, all events"
+        >
           <span className="heatmap-corner" />
           {HEATMAP_MONTHS.map((month) => (
             <span className="heatmap-month" key={month}>
@@ -279,6 +301,7 @@ export function ActivityHeatmap({ events }: { events: EventProgression[] }) {
 
                 return (
                   <span
+                    aria-hidden="true"
                     className={`heatmap-cell heat-${heatLevel(
                       solves,
                       data.maxSolves
@@ -294,6 +317,12 @@ export function ActivityHeatmap({ events }: { events: EventProgression[] }) {
           ))}
         </div>
       </div>
+
+      <ul className="sr-only" id={descriptionId}>
+        {monthDetails.map((detail) => (
+          <li key={detail}>{detail}</li>
+        ))}
+      </ul>
 
       <div className="heatmap-footer">
         <p className="heatmap-summary">

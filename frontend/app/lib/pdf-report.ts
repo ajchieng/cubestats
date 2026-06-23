@@ -340,12 +340,19 @@ function drawLineChart(
   const chartY = y + 13;
   const chartWidth = width - 16;
   const chartHeight = height - 22;
-  const normalized: NormalizedChartSeries[] = series.map((entry) => ({
+  const finiteSeries: NormalizedChartSeries[] = series.map((entry) => ({
     ...entry,
     points: entry.points.filter(isFinitePoint) as (ProgressionPoint & {
       value: number;
     })[],
   }));
+  const { scale: xScale, usesDateAxis } = createChartXScale(finiteSeries);
+  const normalized = usesDateAxis
+    ? finiteSeries.map((entry) => ({
+        ...entry,
+        points: entry.points.filter((point) => dateTime(point.date) !== null),
+      }))
+    : finiteSeries;
   const allValues = normalized.flatMap((entry) =>
     entry.points.map((point) => point.value)
   );
@@ -362,7 +369,6 @@ function drawLineChart(
   const max = Math.max(...allValues);
   const range = max - min || 1;
   const lowerIsBetter = isLowerBetterUnit(unit);
-  const xScale = createChartXScale(normalized);
 
   setDraw(doc, COLORS.faint);
   doc.setLineWidth(0.2);
@@ -835,25 +841,25 @@ function createChartXScale(series: NormalizedChartSeries[]) {
     const minDate = Math.min(...uniqueDates);
     const maxDate = Math.max(...uniqueDates);
     const dateRange = maxDate - minDate || 1;
-    return (
-      point: ProgressionPoint,
-      pointIndex: number,
-      seriesIndex: number
-    ) => {
-      const pointTime = dateTime(point.date);
-      if (pointTime !== null) {
-        return clamp01((pointTime - minDate) / dateRange);
-      }
-
-      return fallbackPointRatio(series, pointIndex, seriesIndex);
+    return {
+      scale: (point: ProgressionPoint) => {
+        const pointTime = dateTime(point.date);
+        return pointTime === null
+          ? 0
+          : clamp01((pointTime - minDate) / dateRange);
+      },
+      usesDateAxis: true,
     };
   }
 
-  return (
-    _point: ProgressionPoint,
-    pointIndex: number,
-    seriesIndex: number
-  ) => fallbackPointRatio(series, pointIndex, seriesIndex);
+  return {
+    scale: (
+      _point: ProgressionPoint,
+      pointIndex: number,
+      seriesIndex: number
+    ) => fallbackPointRatio(series, pointIndex, seriesIndex),
+    usesDateAxis: false,
+  };
 }
 
 function fallbackPointRatio(

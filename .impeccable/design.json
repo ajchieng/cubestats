@@ -1,0 +1,251 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-17T12:01:49Z",
+  "title": "Design System: Cubestats",
+  "extensions": {
+    "colorMeta": {
+      "background": {
+        "role": "neutral",
+        "displayName": "Workspace Grey",
+        "canonical": "#f7f7f8",
+        "tonalRamp": ["oklch(18% 0.006 250)", "oklch(28% 0.006 250)", "oklch(40% 0.006 250)", "oklch(54% 0.006 250)", "oklch(68% 0.006 250)", "oklch(82% 0.006 250)", "oklch(94% 0.006 250)", "#f7f7f8"]
+      },
+      "panel": {
+        "role": "neutral",
+        "displayName": "White Panel",
+        "canonical": "#ffffff",
+        "tonalRamp": ["#181b20", "#2d3239", "#5e6673", "#6b7280", "#d9dee5", "#edf0f3", "#fafafa", "#ffffff"]
+      },
+      "primary": {
+        "role": "primary",
+        "displayName": "Competition Blue",
+        "canonical": "#2563eb",
+        "tonalRamp": ["oklch(20% 0.08 260)", "oklch(30% 0.12 260)", "oklch(42% 0.16 260)", "#2563eb", "#4a86e8", "#8fb8f5", "#cfe0ff", "#ecf3ff"]
+      },
+      "success": {
+        "role": "secondary",
+        "displayName": "Solve Green",
+        "canonical": "#16a34a",
+        "tonalRamp": ["oklch(20% 0.08 145)", "oklch(30% 0.11 145)", "oklch(42% 0.14 145)", "#16a34a", "#45c16f", "oklch(78% 0.12 145)", "#eaf7ef", "oklch(96% 0.03 145)"]
+      },
+      "danger": {
+        "role": "tertiary",
+        "displayName": "Error Red",
+        "canonical": "#dc2626",
+        "tonalRamp": ["oklch(20% 0.08 25)", "oklch(30% 0.12 25)", "oklch(42% 0.16 25)", "#dc2626", "#f87171", "oklch(78% 0.11 25)", "oklch(90% 0.05 25)", "oklch(96% 0.025 25)"]
+      },
+      "dark-background": {
+        "role": "neutral",
+        "displayName": "Dark Workspace",
+        "canonical": "#101216",
+        "tonalRamp": ["#101216", "#171a20", "#1c2027", "#2a3039", "#596371", "#8f99a8", "#d8dde4", "#f4f6f8"]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "App Display",
+        "purpose": "App name only; the one brand-scale type moment."
+      },
+      "headline": {
+        "displayName": "Competitor Headline",
+        "purpose": "Competitor names and comparison names."
+      },
+      "title": {
+        "displayName": "Panel Title",
+        "purpose": "Chart, card, panel, and table titles."
+      },
+      "body": {
+        "displayName": "Product Body",
+        "purpose": "Short explanation, empty states, and landing prose."
+      },
+      "label": {
+        "displayName": "Dense Label",
+        "purpose": "Fields, table headers, metadata, and compact categorical text."
+      },
+      "mono": {
+        "displayName": "Result Mono",
+        "purpose": "WCA IDs, solve values, ranks, attempts, dates, and tabular results."
+      }
+    },
+    "shadows": [
+      {
+        "name": "panel-ambient",
+        "value": "0 1px 2px var(--shadow)",
+        "purpose": "Main analytical panels, chart panels, metric cards, landing panels, results panels, and skeleton panels."
+      },
+      {
+        "name": "control-ambient",
+        "value": "0 1px 2px var(--shadow)",
+        "purpose": "Lightweight emphasis such as comparison record panels."
+      },
+      {
+        "name": "selected-control",
+        "value": "0 1px 3px var(--shadow-2)",
+        "purpose": "Active segmented-control options only."
+      },
+      {
+        "name": "focus-ring",
+        "value": "0 0 0 3px var(--focus-ring)",
+        "purpose": "Focused inputs and selects."
+      }
+    ],
+    "motion": [
+      {
+        "name": "skeleton-shimmer",
+        "value": "1.4s ease-in-out infinite",
+        "purpose": "Loading dashboard panels; disabled under prefers-reduced-motion."
+      },
+      {
+        "name": "state-change",
+        "value": "state changes only; no page choreography defined",
+        "purpose": "Buttons, tabs, hover rows, and form focus should respond without decorative entrance motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "lg",
+        "value": "1080px"
+      },
+      {
+        "name": "md",
+        "value": "760px"
+      },
+      {
+        "name": "sm",
+        "value": "520px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Primary search or compare action.",
+      "html": "<button class=\"ds-btn-primary\">Search</button>",
+      "css": ".ds-btn-primary { min-height: 42px; border: 0; border-radius: 8px; background: var(--btn-bg, #2563eb); color: var(--btn-text, #ffffff); cursor: pointer; font: inherit; font-weight: 760; padding: 0 18px; } .ds-btn-primary:hover { background: var(--accent-2, #1d6fff); } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring, rgba(37, 99, 235, 0.16)); } .ds-btn-primary:disabled { cursor: not-allowed; opacity: 0.56; }"
+    },
+    {
+      "name": "Utility Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Theme toggle, recent search chip, pagination, or secondary action.",
+      "html": "<button class=\"ds-btn-utility\">Dark</button>",
+      "css": ".ds-btn-utility { min-height: 34px; border: 1px solid var(--border-3, #d9dee5); border-radius: 8px; background: var(--panel, #ffffff); color: var(--text, #2d3239); cursor: pointer; font: inherit; font-size: 0.84rem; font-weight: 760; padding: 0 12px; } .ds-btn-utility:hover { border-color: var(--accent-2, #1d6fff); color: var(--accent, #2563eb); } .ds-btn-utility:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring, rgba(37, 99, 235, 0.16)); } .ds-btn-utility:disabled { cursor: default; opacity: 0.5; }"
+    },
+    {
+      "name": "WCA ID Input",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Uppercase WCA ID entry field with validation states.",
+      "html": "<label class=\"ds-field\"><span>WCA ID</span><input class=\"ds-input\" placeholder=\"2019CHIE01\" /></label>",
+      "css": ".ds-field { display: grid; gap: 7px; color: var(--label, #5e6673); font: inherit; font-size: 0.78rem; font-weight: 760; } .ds-input { width: 100%; min-height: 42px; border: 1px solid var(--border-3, #d9dee5); border-radius: 8px; background: var(--field, #ffffff); color: var(--heading, #181b20); font: inherit; outline: none; padding: 12px 14px; text-transform: uppercase; } .ds-input:focus { border-color: var(--accent-2, #1d6fff); box-shadow: 0 0 0 3px var(--focus-ring, rgba(37, 99, 235, 0.16)); } .ds-input::placeholder { color: var(--muted-2, #6b7280); }"
+    },
+    {
+      "name": "Metric Card",
+      "kind": "card",
+      "refersTo": "metric-card",
+      "description": "Compact performance stat with label, value, and optional detail.",
+      "html": "<div class=\"ds-metric\"><p class=\"ds-label\">Current PB</p><p class=\"ds-value\">6.82</p><p class=\"ds-detail\">WR 142</p></div>",
+      "css": ".ds-metric { min-height: 112px; border: 1px solid var(--border, #e2e5e9); border-radius: 8px; background: var(--panel, #ffffff); box-shadow: 0 1px 2px var(--shadow, rgba(24, 27, 32, 0.05)); color: var(--text, #2d3239); padding: 18px; } .ds-label { margin: 0 0 8px; color: var(--label, #5e6673); font-size: 0.74rem; font-weight: 800; letter-spacing: 0; text-transform: uppercase; } .ds-value { margin: 0; color: var(--heading, #181b20); font-size: 1.75rem; font-weight: 650; line-height: 1.05; } .ds-detail { margin: 5px 0 0; color: var(--muted, #626b77); font-size: 0.78rem; font-weight: 700; font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "Event Tabs",
+      "kind": "nav",
+      "refersTo": "tab-active",
+      "description": "Wrapped event selector with blue active state.",
+      "html": "<div class=\"ds-tabs\" aria-label=\"Events\"><button class=\"ds-tab\" aria-pressed=\"false\">3x3</button><button class=\"ds-tab ds-tab-active\" aria-pressed=\"true\">2x2</button></div>",
+      "css": ".ds-tabs { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 2px; border-bottom: 1px solid var(--border, #e2e5e9); } .ds-tab { width: auto; min-height: 32px; padding: 0 14px; border: 1px solid var(--border-3, #d9dee5); border-radius: 8px; background: var(--panel, #ffffff); color: var(--label, #5e6673); cursor: pointer; font: inherit; font-size: 0.86rem; font-weight: 760; } .ds-tab:hover { border-color: var(--accent-2, #1d6fff); color: var(--accent, #2563eb); } .ds-tab-active { border-color: var(--accent, #2563eb); background: var(--accent, #2563eb); color: #ffffff; }"
+    },
+    {
+      "name": "Segmented Control",
+      "kind": "nav",
+      "refersTo": "button-secondary",
+      "description": "Compact mode switch for chart aggregation.",
+      "html": "<div class=\"ds-segmented\" role=\"group\"><button>Raw</button><button class=\"ds-active\">1M</button><button>6M</button><button>1Y</button></div>",
+      "css": ".ds-segmented { display: inline-grid; grid-template-columns: repeat(4, minmax(38px, auto)); gap: 3px; padding: 3px; border: 1px solid var(--border-4, #dfe4ea); border-radius: 8px; background: var(--segmented-bg, #f2f5f9); } .ds-segmented button { min-height: 28px; padding: 0 9px; border: 0; border-radius: 6px; background: transparent; color: var(--muted, #626b77); cursor: pointer; font: inherit; font-size: 0.76rem; font-weight: 800; } .ds-segmented button:hover { color: var(--accent, #2563eb); } .ds-segmented .ds-active { background: var(--panel, #ffffff); color: var(--accent, #2563eb); box-shadow: 0 1px 3px var(--shadow-2, rgba(24, 27, 32, 0.09)); }"
+    },
+    {
+      "name": "Results Table",
+      "kind": "custom",
+      "refersTo": "surface-card",
+      "description": "Dense official round results with horizontal scrolling and mono values.",
+      "html": "<div class=\"ds-table-wrap\"><table class=\"ds-table\"><thead><tr><th>Date</th><th>Competition</th><th>Best</th><th>Average</th></tr></thead><tbody><tr><td>2026-06-17</td><td><strong>Example Open</strong><span>Example2026</span></td><td class=\"ds-result\">6.82</td><td class=\"ds-result\">7.41</td></tr></tbody></table></div>",
+      "css": ".ds-table-wrap { overflow-x: auto; border: 1px solid var(--border, #e2e5e9); border-radius: 8px; background: var(--panel, #ffffff); } .ds-table { width: 100%; min-width: 560px; border-collapse: collapse; color: var(--text, #2d3239); font: inherit; font-size: 0.86rem; } .ds-table th, .ds-table td { border-bottom: 1px solid var(--border-2, #edf0f3); padding: 11px 12px; text-align: left; vertical-align: middle; } .ds-table th { color: var(--label, #5e6673); font-size: 0.72rem; font-weight: 820; letter-spacing: 0; text-transform: uppercase; } .ds-table tbody tr:hover { background: var(--hover, #f4f7fb); } .ds-table td span { display: block; color: var(--muted-2, #6b7280); font-size: 0.78rem; font-weight: 650; } .ds-result { font-family: var(--font-geist-mono), SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace; font-weight: 650; white-space: nowrap; }"
+    },
+    {
+      "name": "Empty State",
+      "kind": "card",
+      "refersTo": "surface-card",
+      "description": "Dashed neutral placeholder for missing chart or table data.",
+      "html": "<p class=\"ds-empty\">No official round results for this event.</p>",
+      "css": ".ds-empty { min-height: 200px; display: grid; place-items: center; margin: 0; border: 1px dashed var(--border-4, #dfe4ea); border-radius: 8px; color: var(--muted, #626b77); font: inherit; font-weight: 650; padding: 20px; text-align: center; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Competition Logbook",
+    "overview": "Cubestats should feel like a precise competition logbook made interactive: compact, factual, fast to scan, and built around official WCA evidence. It is not a business-intelligence dashboard wearing speedcubing labels; it is a specialist analysis surface where PBs, averages, ranks, dates, attempts, and DNF markers stay close to the user's hand.\n\nThe visual system is restrained product UI: cool light neutrals, a single blue action and selection color, low ambient elevation, 8px corners, dense grids, and stable native controls. Dark mode mirrors the same structure with deeper neutral panels and a softer blue accent. Personality comes from WCA-specific language, real competitor examples, tabular solve detail, and chart semantics, not decoration.",
+    "keyCharacteristics": [
+      "Restrained blue-on-neutral palette with semantic success and danger states.",
+      "Dense but legible analytics cards, charts, tabs, tables, and heatmaps.",
+      "One sans family for UI and one mono family for result values and WCA IDs.",
+      "8px geometry across controls, panels, tabs, chips, and empty states.",
+      "Shadows are quiet and structural; data hierarchy carries the interface."
+    ],
+    "rules": [
+      {
+        "name": "The Blue Means Current Rule",
+        "body": "Use Competition Blue only for primary action, current selection, chart focus, and active data state. Do not wash the whole UI in blue.",
+        "section": "colors"
+      },
+      {
+        "name": "The No Beige Analytics Rule",
+        "body": "The workspace background is cool neutral, not cream, sand, ivory, or paper. Warm editorial backgrounds make the app feel generated and less analytical.",
+        "section": "colors"
+      },
+      {
+        "name": "The Semantic Color Rule",
+        "body": "Green means success or better performance; red means error. Do not use either as ornament.",
+        "section": "colors"
+      },
+      {
+        "name": "The Data Gets the Mono Rule",
+        "body": "Use mono for values that need scanning or comparison. Do not put navigation, buttons, or prose in mono for flavor.",
+        "section": "typography"
+      },
+      {
+        "name": "The Fixed Product Scale Rule",
+        "body": "Use fixed rem sizes and responsive breakpoints. Do not introduce fluid viewport typography for dashboard panels.",
+        "section": "typography"
+      },
+      {
+        "name": "The Border First Rule",
+        "body": "Every analytical surface earns structure with a 1px border before it earns a shadow.",
+        "section": "elevation"
+      },
+      {
+        "name": "The No Ghost Card Rule",
+        "body": "Do not combine bigger soft shadows with decorative borders. The existing shadow vocabulary is already the ceiling.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep Cubestats in the product register: fast lookup, comparison, event drilldown, and data inspection come before presentation.",
+      "Do use Competition Blue for primary action, selected state, and chart focus only.",
+      "Do preserve dense analytics where density helps speedcubers compare official results.",
+      "Do keep tables and charts readable on small screens with horizontal scrolling and structural breakpoints.",
+      "Do use WCA-specific terms directly: PB, Ao5, DNF, WCA ID, Kinch, Sum of Ranks, single, average, round, attempt.",
+      "Do keep 8px as the default radius for controls and panels.",
+      "Do use skeleton loading for dashboard content instead of centered spinners."
+    ],
+    "donts": [
+      "Don't make Cubestats feel like a generic corporate dashboard.",
+      "Don't make it feel like a KPI reporting suite.",
+      "Don't make it feel like a gamified toy.",
+      "Don't ship obvious AI slop: decorative analytics cliches, inflated SaaS hero patterns, generic card grids, vague insights language, or ornamental gradients.",
+      "Don't use gradient text, glassmorphism, decorative side stripes, oversized rounded cards, or repeating stripe backgrounds.",
+      "Don't invent non-standard form controls, tabs, tables, or modals for flavor.",
+      "Don't use green, red, or blue as decoration when they are not carrying state or data meaning."
+    ]
+  }
+}

@@ -46,14 +46,13 @@ export function solveValueColor(
   // t = 0 at the median (darkest), 1 at the extremes (lightest).
   const distance = Math.abs(value - median);
   const t = scale > 0 ? Math.min(1, distance / scale) : 0;
+  const bucket = t > 0.66 ? "2" : t > 0.33 ? "1" : "0";
 
   if (value <= median) {
-    // Faster than the median is better -> green, lighter the better it is.
-    return `hsl(142, 68%, ${(24 + t * 20).toFixed(1)}%)`;
+    return `var(--solve-fast-${bucket})`;
   }
 
-  // Slower than the median -> red, lighter the further from the median.
-  return `hsl(4, 74%, ${(32 + t * 22).toFixed(1)}%)`;
+  return `var(--solve-slow-${bucket})`;
 }
 
 export function droppedAo5AttemptIndexes(row: ResultRow) {

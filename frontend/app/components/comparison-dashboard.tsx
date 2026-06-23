@@ -8,18 +8,23 @@ import type {
 import { formatDnfRate } from "../lib/result-utils";
 import { ComparisonChart } from "./charts";
 
-const COMPARE_COLORS = ["#2563eb", "#f97316"] as const;
+const COMPARE_COLORS = [
+  "var(--compare-primary)",
+  "var(--compare-secondary)",
+] as const;
 
 export function ComparisonDashboard({
   primary,
   secondary,
   selectedEventId,
   onSelectEvent,
+  onExportPdf,
 }: {
   primary: CompetitorProgression;
   secondary: CompetitorProgression;
   selectedEventId: string;
   onSelectEvent: (eventId: string) => void;
+  onExportPdf: () => void;
 }) {
   const eventOptions = useMemo(() => {
     const names = new Map<string, string>();
@@ -145,6 +150,12 @@ export function ComparisonDashboard({
               </option>
             ))}
           </select>
+        </div>
+
+        <div className="report-actions">
+          <button type="button" className="secondary-action" onClick={onExportPdf}>
+            Export PDF
+          </button>
         </div>
       </div>
 

@@ -47,6 +47,7 @@ export function CompetitorDashboard({
   onSelectEvent,
   onAverageChartModeChange,
   onResultsPageChange,
+  onExportPdf,
 }: {
   profile: CompetitorProgression;
   selectedEvent: EventProgression;
@@ -56,6 +57,7 @@ export function CompetitorDashboard({
   onSelectEvent: (eventId: string) => void;
   onAverageChartModeChange: (mode: AverageChartMode) => void;
   onResultsPageChange: (page: number) => void;
+  onExportPdf: () => void;
 }) {
   const totalCompetitions = new Set(
     profile.events.flatMap((event) =>
@@ -84,19 +86,24 @@ export function CompetitorDashboard({
             <p className="kinch-value">{kinchScore.toFixed(2)}</p>
           </div>
         ) : null}
+
+        <div className="report-actions">
+          <button type="button" className="secondary-action" onClick={onExportPdf}>
+            Export PDF
+          </button>
+        </div>
       </div>
 
-      <div className="event-tabs" role="tablist" aria-label="Events">
+      <div className="event-tabs" aria-label="Events">
         {profile.events.map((event) => (
           <button
-            aria-selected={event.event_id === selectedEvent.event_id}
+            aria-pressed={event.event_id === selectedEvent.event_id}
             className={event.event_id === selectedEvent.event_id ? "active" : ""}
             key={event.event_id}
             onClick={() => {
               onSelectEvent(event.event_id);
               onResultsPageChange(1);
             }}
-            role="tab"
             type="button"
           >
             {EVENT_SHORT_LABELS[event.event_id] ?? event.name}
