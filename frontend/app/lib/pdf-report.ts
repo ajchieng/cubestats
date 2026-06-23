@@ -29,6 +29,10 @@ type ChartSeries = {
   points: ProgressionPoint[];
 };
 
+type NormalizedChartSeries = Omit<ChartSeries, "points"> & {
+  points: (ProgressionPoint & { value: number })[];
+};
+
 type RgbColor = [number, number, number];
 
 const PAGE = {
@@ -336,12 +340,14 @@ function drawLineChart(
   const chartY = y + 13;
   const chartWidth = width - 16;
   const chartHeight = height - 22;
-  const normalized = series.map((entry) => ({
+  const normalized: NormalizedChartSeries[] = series.map((entry) => ({
     ...entry,
-    points: entry.points.filter(isFinitePoint),
+    points: entry.points.filter(isFinitePoint) as (ProgressionPoint & {
+      value: number;
+    })[],
   }));
   const allValues = normalized.flatMap((entry) =>
-    entry.points.map((point) => point.value as number)
+    entry.points.map((point) => point.value)
   );
 
   if (allValues.length === 0) {
@@ -355,6 +361,8 @@ function drawLineChart(
   const min = Math.min(...allValues);
   const max = Math.max(...allValues);
   const range = max - min || 1;
+  const lowerIsBetter = isLowerBetterUnit(unit);
+  const xScale = createChartXScale(normalized);
 
   setDraw(doc, COLORS.faint);
   doc.setLineWidth(0.2);
@@ -366,8 +374,12 @@ function drawLineChart(
   setText(doc, COLORS.muted);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(6.5);
-  doc.text(formatChartValue(max, unit), chartX, chartY - 2);
-  doc.text(formatChartValue(min, unit), chartX, chartY + chartHeight + 5);
+  doc.text(formatChartValue(lowerIsBetter ? min : max, unit), chartX, chartY - 2);
+  doc.text(
+    formatChartValue(lowerIsBetter ? max : min, unit),
+    chartX,
+    chartY + chartHeight + 5
+  );
 
   normalized.forEach((entry, seriesIndex) => {
     if (entry.points.length === 0) {
@@ -378,13 +390,10 @@ function drawLineChart(
     doc.setLineWidth(0.75);
 
     const coords = entry.points.map((point, index) => {
-      const divisor = Math.max(entry.points.length - 1, 1);
+      const valueRatio = (point.value - min) / range;
       return {
-        x: chartX + (index / divisor) * chartWidth,
-        y:
-          chartY +
-          chartHeight -
-          (((point.value as number) - min) / range) * chartHeight,
+        x: chartX + xScale(point, index, seriesIndex) * chartWidth,
+        y: chartY + (lowerIsBetter ? valueRatio : 1 - valueRatio) * chartHeight,
       };
     });
 
@@ -713,9 +722,10 @@ function calculateHeadToHead(
     }
 
     shared += 1;
-    if (a < b) {
+    const higherIsBetter = isHigherBetterEvent(event);
+    if ((higherIsBetter && a > b) || (!higherIsBetter && a < b)) {
       primaryWins += 1;
-    } else if (b < a) {
+    } else if ((higherIsBetter && b > a) || (!higherIsBetter && b < a)) {
       secondaryWins += 1;
     } else {
       ties += 1;
@@ -814,6 +824,75 @@ function barrierLabel(threshold: number, unit: string) {
 
 function isFinitePoint(point: ProgressionPoint) {
   return typeof point.value === "number" && Number.isFinite(point.value);
+}
+
+function createChartXScale(series: NormalizedChartSeries[]) {
+  const datedValues = series
+    .flatMap((entry) => entry.points.map((point) => dateTime(point.date)))
+    .filter((value): value is number => value !== null);
+  const uniqueDates = Array.from(new Set(datedValues));
+
+  if (uniqueDates.length >= 2) {
+    const minDate = Math.min(...uniqueDates);
+    const maxDate = Math.max(...uniqueDates);
+    const dateRange = maxDate - minDate || 1;
+    return (
+      point: ProgressionPoint,
+      pointIndex: number,
+      seriesIndex: number
+    ) => {
+      const pointTime = dateTime(point.date);
+      if (pointTime !== null) {
+        return clamp01((pointTime - minDate) / dateRange);
+      }
+
+      return fallbackPointRatio(series, pointIndex, seriesIndex);
+    };
+  }
+
+  return (
+    _point: ProgressionPoint,
+    pointIndex: number,
+    seriesIndex: number
+  ) => fallbackPointRatio(series, pointIndex, seriesIndex);
+}
+
+function fallbackPointRatio(
+  series: NormalizedChartSeries[],
+  pointIndex: number,
+  seriesIndex: number
+) {
+  const maxPointCount = Math.max(
+    ...series.map((entry) => entry.points.length),
+    1
+  );
+  if (maxPointCount <= 1) {
+    const divisor = Math.max(series.length - 1, 1);
+    return divisor === 0 ? 0 : seriesIndex / divisor;
+  }
+
+  return clamp01(pointIndex / (maxPointCount - 1));
+}
+
+function dateTime(date: string | null) {
+  if (!date) {
+    return null;
+  }
+
+  const time = new Date(date).getTime();
+  return Number.isFinite(time) ? time : null;
+}
+
+function clamp01(value: number) {
+  return Math.min(1, Math.max(0, value));
+}
+
+function isLowerBetterUnit(unit: string) {
+  return unit !== "score";
+}
+
+function isHigherBetterEvent(event: EventProgression) {
+  return event.unit === "score" || event.event_id === "333mbf";
 }
 
 function valueOrNa(value: string | null | undefined) {
