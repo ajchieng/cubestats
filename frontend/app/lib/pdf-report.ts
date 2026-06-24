@@ -1007,12 +1007,28 @@ function formatExportDate(date: Date) {
   }).format(date);
 }
 
+// jsPDF's built-in Helvetica only encodes Latin-1 (U+0000–U+00FF), so accented
+// Latin names render fine but other scripts (Thai, CJK, Cyrillic, …) become
+// mojibake. WCA always supplies a romanized name with the local-script form in
+// parentheses, so drop foreign parentheticals and strip any leftover
+// non-Latin-1 glyphs, leaving a readable romanized string.
+function toLatinText(text: string): string {
+  return text
+    .replace(/\([^)]*\)/g, (group) =>
+      /[^ -ÿ]/.test(group) ? "" : group
+    )
+    .replace(/[^ -ÿ]/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 function truncateText(doc: PdfDoc, text: string, maxWidth: number) {
-  if (doc.getTextWidth(text) <= maxWidth) {
-    return text;
+  const safe = toLatinText(text);
+  if (doc.getTextWidth(safe) <= maxWidth) {
+    return safe;
   }
 
-  let truncated = text;
+  let truncated = safe;
   while (truncated.length > 1 && doc.getTextWidth(`${truncated}...`) > maxWidth) {
     truncated = truncated.slice(0, -1);
   }
